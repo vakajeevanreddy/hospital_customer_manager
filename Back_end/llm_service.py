@@ -5,65 +5,83 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize Groq client with the API key from environment
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def call_llm(prompt: str) -> str:
-    """Standard LLM call returning a string response."""
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"LLM Error: {str(e)}"
 
-def call_llm_json(prompt: str) -> dict:
-    """Call LLM and parse the response as JSON with robust cleaning."""
+# ----------------------------------------
+# BASIC TEXT CALL (for router, etc.)
+# ----------------------------------------
+def call_llm(prompt: str) -> str:
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a CRM assistant. Always respond with valid JSON only. No markdown, no explanation, just JSON."
+                    "content": "You are a strict assistant. Respond concisely."
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0
         )
-        raw = response.choices[0].message.content.strip()
-        
-        # Remove markdown code blocks if present
-        if raw.startswith("```"):
-            raw = raw.strip("`").replace("json", "", 1).strip()
+        return response.choices[0].message.content.strip()
 
-        
-        # Robust JSON extraction logic
-        start_idx = raw.find('{')
-        end_idx = raw.rfind('}')
-        
-        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            cleaned_json = raw[start_idx:end_idx+1]
-        else:
-            cleaned_json = raw.strip()
-
-        try:
-            parsed = json.loads(cleaned_json)
-            # Flatten if nested (e.g., {"meeting": {...}})
-            if isinstance(parsed, dict) and len(parsed) == 1:
-                first_val = list(parsed.values())[0]
-                if isinstance(first_val, dict):
-                    return first_val
-            return parsed
-        except Exception as e:
-            import os
-            os.makedirs("scratch", exist_ok=True)
-            with open("scratch/llm_error.log", "a") as f:
-                f.write(f"Parse Error: {e}\nRaw JSON:\n{raw}\nCleaned JSON:\n{cleaned_json}\n---\n")
-            return {}
     except Exception as e:
-        return {"error": f"LLM Error: {str(e)}"}
+        return f"LLM Error: {str(e)}"
+
+
+# ----------------------------------------
+# STRICT JSON CALL (THIS IS THE FIX)
+# ----------------------------------------
+def call_llm_json(prompt: str) -> dict:
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+
+            # 🔥 KEY FIX: FORCE JSON OUTPUT
+            response_format={"type": "json_object"},
+
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a CRM data extraction engine.\n"
+                        "Always return ONLY valid JSON.\n"
+                        "No explanation. No markdown. No extra text."
+                    )
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+
+        raw = response.choices[0].message.content.strip()
+
+        # Debug log (VERY IMPORTANT)
+        print("RAW LLM JSON:", raw)
+
+        # Direct parse (should work now)
+        parsed = json.loads(raw)
+
+        # Optional flatten (if weird nesting happens)
+        if isinstance(parsed, dict) and len(parsed) == 1:
+            first_val = list(parsed.values())[0]
+            if isinstance(first_val, dict):
+                return first_val
+
+        return parsed
+
+    except Exception as e:
+        print("JSON PARSE ERROR:", str(e))
+
+        # fallback attempt (minimal cleanup only)
+        try:
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            cleaned = raw[start:end]
+            return json.loads(cleaned)
+        except:
+            return {
+                "error": "Failed to parse JSON",
+                "raw_output": raw
+            }

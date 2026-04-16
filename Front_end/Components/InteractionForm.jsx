@@ -105,23 +105,23 @@ export default function InteractionForm({ formData, onFormChange, onSave }) {
                         onChange={(e) => handleChange("voice_summary", e.target.value)}
                     />
                 </div>
-                
+
                 <div className="form-group full-width">
                     <label>HCP Sentiment / Reaction</label>
                     <div className="observation-toggle">
-                        <button 
+                        <button
                             className={`obs-btn positive ${formData.observation === 'Positive' ? 'active' : ''}`}
                             onClick={() => handleChange("observation", "Positive")}
                         >
                             Interested
                         </button>
-                        <button 
+                        <button
                             className={`obs-btn neutral ${formData.observation === 'Neutral' ? 'active' : ''}`}
                             onClick={() => handleChange("observation", "Neutral")}
                         >
                             Neutral
                         </button>
-                        <button 
+                        <button
                             className={`obs-btn negative ${formData.observation === 'Negative' ? 'active' : ''}`}
                             onClick={() => handleChange("observation", "Negative")}
                         >
