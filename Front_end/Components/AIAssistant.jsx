@@ -26,9 +26,9 @@ export default function AIAssistant({ onAIUpdate, currentData }) {
         setIsLoading(true);
 
         try {
-            const response = await axios.post("http://127.0.0.1:8000/ai-chat", {
+            const response = await axios.post("http://127.0.0.1:8000/ai-assistant", {
                 message: input,
-                context: currentData
+                formData: currentData
             });
 
             const aiMsg = { 

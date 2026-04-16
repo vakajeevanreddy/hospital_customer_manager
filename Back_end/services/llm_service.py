@@ -38,22 +38,27 @@ def call_llm_json(prompt: str) -> dict:
         raw = response.choices[0].message.content.strip()
         
         # Robust JSON extraction logic
-        cleaned_json = raw.strip()
-        if "```json" in cleaned_json:
-            cleaned_json = cleaned_json.split("```json")[-1].split("```")[0].strip()
-        elif "```" in cleaned_json:
-            cleaned_json = cleaned_json.split("```")[-1].split("```")[0].strip()
+        start_idx = raw.find('{')
+        end_idx = raw.rfind('}')
         
-        # Aggressive Regex fallback
-        if not cleaned_json.startswith("{"):
-            import re
-            match = re.search(r'\{.*\}', cleaned_json, re.DOTALL)
-            if match:
-                cleaned_json = match.group()
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            cleaned_json = raw[start_idx:end_idx+1]
+        else:
+            cleaned_json = raw.strip()
 
         try:
-            return json.loads(cleaned_json)
-        except Exception:
+            parsed = json.loads(cleaned_json)
+            # Flatten if nested (e.g., {"meeting": {...}})
+            if isinstance(parsed, dict) and len(parsed) == 1:
+                first_val = list(parsed.values())[0]
+                if isinstance(first_val, dict):
+                    return first_val
+            return parsed
+        except Exception as e:
+            import os
+            os.makedirs("scratch", exist_ok=True)
+            with open("scratch/llm_error.log", "a") as f:
+                f.write(f"Parse Error: {e}\nRaw JSON:\n{raw}\nCleaned JSON:\n{cleaned_json}\n---\n")
             return {}
     except Exception as e:
         return {"error": f"LLM Error: {str(e)}"}

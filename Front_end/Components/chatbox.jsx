@@ -12,7 +12,7 @@ export default function ChatBox() {
         setMessages(prev => [...prev, userMsg]);
 
         try {
-            const res = await axios.post("http://localhost:8000/ai-chat", {
+            const res = await axios.post("http://127.0.0.1:8000/ai-assistant", {
                 message: input,
             });
 

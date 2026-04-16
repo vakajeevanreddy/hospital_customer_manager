@@ -1,0 +1,22 @@
+Parse Error: Expecting value: line 1 column 1 (char 0)
+Raw JSON:
+```
+{
+  "date": "2026-04-15",
+  "time": "12:42",
+  "interaction_type": "Call",
+  "hcp_name": "Dr. John",
+  "specialty": "Cardiology",
+  "organization": "Apollo Hospital",
+  "product_focus": "Detmrri 358",
+  "attendees": "Hospital staff",
+  "topics_discussed": "Clinical data, efficacy, and safety profile",
+  "voice_summary": "Discussed Detmrri 358 with Dr. John, focusing on clinical data, efficacy, and safety profile",
+  "follow_up_actions": "",
+  "observation": "Interested",
+  "materials_shared": "",
+  "samples_distributed": "",
+  "suggested_references": ""
+}
+```
+---
