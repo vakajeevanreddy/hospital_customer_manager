@@ -1,40 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
-from models.interaction import Interaction
-from pydantic import BaseModel
-from typing import List, Optional
+from models.interaction import Interaction as InteractionModel
+from db.schemas import InteractionCreate, Interaction as InteractionSchema
+from typing import List
 
 router = APIRouter()
 
-class InteractionSchema(BaseModel):
-    hcp_name: Optional[str] = ""
-    specialty: Optional[str] = ""
-    organization: Optional[str] = ""
-    interaction_type: Optional[str] = ""
-    date: Optional[str] = ""
-    time: Optional[str] = ""
-    observation: Optional[str] = ""
-    product_focus: Optional[str] = ""
-    attendees: Optional[str] = ""
-    topics_discussed: Optional[str] = ""
-    voice_summary: Optional[str] = ""
-    materials_shared: Optional[str] = ""
-    samples_distributed: Optional[str] = ""
-    suggested_references: Optional[str] = ""
-    follow_up_actions: Optional[str] = ""
 
-    class Config:
-        orm_mode = True
+@router.post("/interactions", response_model=InteractionSchema)
+def create_interaction(data: InteractionCreate, db: Session = Depends(get_db)):
+    """Save a new HCP interaction to the database."""
+    try:
+        db_interaction = InteractionModel(
+            hcp_name=data.hcp_name or "",
+            specialty=data.specialty or "",
+            organization=data.organization or "",
+            product_focus=data.product_focus or "",
+            interaction_type=data.interaction_type or "",
+            date=data.date or "",
+            time=data.time or "",
+            attendees=data.attendees or "",
+            topics_discussed=data.topics_discussed or "",
+            voice_summary=data.voice_summary or "",
+            sentiment=data.sentiment or "",
+            follow_up_actions=data.follow_up_actions or "",
+            observation=data.observation or "",
+            materials_shared=data.materials_shared or "",
+            samples_distributed=data.samples_distributed or "",
+            suggested_references=data.suggested_references or "",
+        )
+        db.add(db_interaction)
+        db.commit()
+        db.refresh(db_interaction)
+        return db_interaction
+    except Exception as e:
+        db.rollback()
+        print(f"ERROR: Failed to save interaction: {str(e)}")  # This will show up in your terminal
+        raise HTTPException(status_code=400, detail=f"Error creating interaction: {str(e)}")
 
-@router.post("/interactions")
-def create_interaction(data: InteractionSchema, db: Session = Depends(get_db)):
-    db_interaction = Interaction(**data.dict())
-    db.add(db_interaction)
-    db.commit()
-    db.refresh(db_interaction)
-    return db_interaction
 
 @router.get("/interactions", response_model=List[InteractionSchema])
 def get_interactions(db: Session = Depends(get_db)):
-    return db.query(Interaction).order_by(Interaction.created_at.desc()).all()
+    """Get all interactions, newest first."""
+    return db.query(InteractionModel).order_by(InteractionModel.created_at.desc()).all()

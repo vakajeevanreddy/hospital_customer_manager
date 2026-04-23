@@ -1,37 +1,55 @@
 from services.llm_service import call_llm_json
 from datetime import datetime
 
+REQUIRED_KEYS = [
+    "hcp_name","specialty","organization","interaction_type","date","time",
+    "attendees","topics_discussed","voice_summary","sentiment",
+    "follow_up_actions","product_focus","observation",
+    "materials_shared","samples_distributed","suggested_references"
+]
+
+def normalize_output(result: dict) -> dict:
+    """Guarantee all required keys exist in the output."""
+    normalized = {}
+    for key in REQUIRED_KEYS:
+        normalized[key] = result.get(key, "")
+    return normalized
 
 def log_interaction_tool(input_text: str) -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     now = datetime.now().strftime("%H:%M")
 
     prompt = f"""
-    You are a high-precision Medical CRM Assistant. Extract structured Healthcare/Pharmaceutical interaction data from this voice-to-text transcript. 
-    Today's date is {today} and current time is {now}.
+    You are a Medical CRM Assistant. Extract structured interaction data.
 
+    Today's date: {today}, current time: {now}.
     Text: "{input_text}"
 
-    STRICT FORMATTING RULES:
-    You MUST return ONLY a SINGLE, FLAT JSON object containing EXACTLY these keys. DO NOT nest the JSON under any top-level key like "meeting" or "data".
-    
-    Keys to extract:
-    - "date": "YYYY-MM-DD"
-    - "time": "HH:MM" (24h)
-    - "interaction_type": ("Meeting", "Call", "Email", "Conference", "Medical Inquiry")
-    - "hcp_name": Full Name (e.g., Dr. Smith)
-    - "specialty": Clinical area (e.g., Cardiology, Oncology)
-    - "organization": Facility name (e.g., "Mayo Clinic")
-    - "product_focus": Pharmaceutical drug or disease state discussed
-    - "attendees": Names of other doctors, staff mentioned
-    - "topics_discussed": Clinical data, efficacy, safety
-    - "voice_summary": A professional clinical summary
-    - "follow_up_actions": CLEAR, ACTIONABLE steps
-    - "observation": ("Positive", "Neutral", "Negative")
-    - "materials_shared": Any materials or resources shared
-    - "samples_distributed": Any product samples handed out
-    - "suggested_references": Recommended clinical trials or papers
+    Return a JSON object with two top-level keys:
+    - "response": a short natural language reply confirming what was extracted
+    - "formData": a flat JSON object with these exact keys:
+      {REQUIRED_KEYS}
 
-    If a field is not found in the text, use an empty string "".
+    Rules:
+    - Always include all keys in formData, even if empty.
+    - Use snake_case exactly as shown.
+    - If a field is missing, return "".
+    - For topics_discussed, summarize main points in short phrases.
+    - For voice_summary, generate a concise 1–2 sentence summary.
+    - For follow_up_actions, suggest next steps if mentioned.
     """
-    return call_llm_json(prompt)
+
+    try:
+        raw = call_llm_json(prompt)
+    except Exception as e:
+        print("LLM extraction error:", e)
+        raw = {}
+
+    # Normalize formData
+    form_data = normalize_output(raw.get("formData", {}))
+
+    # Build final output
+    return {
+        "response": raw.get("response", "I've filled the interaction details."),
+        "formData": form_data
+    }

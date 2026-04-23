@@ -1,136 +1,151 @@
 import React, { useState, useRef, useEffect } from "react";
-import axios from "axios";
 
-export default function AIAssistant({ onAIUpdate, currentData }) {
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+const AIAssistant = ({ formData, onAIUpdate }) => {
+    const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
-    const [messages, setMessages] = useState([
-        { role: "ai", text: "Hello! I'm your AI CRM Assistant. You can describe your interaction with an HCP here (e.g., 'Met Dr. Smith today about Product X, positive feedback'), and I'll fill out the form for you." }
-    ]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
     const chatEndRef = useRef(null);
 
-    const scrollToBottom = () => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
+    // Auto-scroll to bottom when messages change
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages, loading]);
 
-    // Parse all fields from one input
-    const preprocessInput = (input) => {
-        const payload = {};
+    const sendMessage = async (e) => {
+        e.preventDefault();
+        const text = input.trim();
+        if (!text || loading) return;
 
-        const nameMatch = input.match(/name\s+(.+?)(?=\s+and|$)/i);
-        if (nameMatch) payload.hcp_name = nameMatch[1].trim();
-
-        const specialtyMatch = input.match(/specialty\s+(.+?)(?=\s+and|$)/i);
-        if (specialtyMatch) payload.specialty = specialtyMatch[1].trim();
-
-        const hospitalMatch = input.match(/hospital\s+(.+?)(?=\s+and|$)/i);
-        if (hospitalMatch) payload.organization = hospitalMatch[1].trim();
-
-        const drugMatch = input.match(/drug\s+(.+?)(?=\s+and|$)/i) || input.match(/disease\s+(.+?)(?=\s+and|$)/i);
-        if (drugMatch) payload.product_focus = drugMatch[1].trim();
-
-        const interactionMatch = input.match(/interaction\s+(.+?)(?=\s+and|$)/i);
-        if (interactionMatch) payload.interaction_type = interactionMatch[1].trim();
-
-        const dateMatch = input.match(/date\s+([0-9]{2}-[0-9]{2}-[0-9]{4})/i);
-        if (dateMatch) {
-            const [day, month, year] = dateMatch[1].split("-");
-            payload.date = `${year}-${month}-${day}`; // convert to YYYY-MM-DD
-        }
-
-        const timeMatch = input.match(/time\s+([0-9]{1,2}:[0-9]{2})/i);
-        if (timeMatch) payload.time = timeMatch[1].trim();
-
-        const attendeesMatch = input.match(/attendees\s+(.+?)(?=\s+and|$)/i) || input.match(/staff\s+(.+?)(?=\s+and|$)/i);
-        if (attendeesMatch) payload.attendees = attendeesMatch[1].trim();
-
-        const topicsMatch = input.match(/topics\s+(.+?)(?=\s+and|$)/i);
-        if (topicsMatch) payload.topics_discussed = topicsMatch[1].trim();
-
-        const summaryMatch = input.match(/summary\s+(.+?)(?=\s+and|$)/i);
-        if (summaryMatch) payload.voice_summary = summaryMatch[1].trim();
-
-        const sentimentMatch = input.match(/sentiment\s+(Positive|Neutral|Negative)/i);
-        if (sentimentMatch) payload.observation = sentimentMatch[1].trim();
-
-        const stepsMatch = input.match(/steps\s+(.+?)(?=\s+and|$)/i);
-        if (stepsMatch) payload.follow_up_actions = stepsMatch[1].trim();
-
-        return payload;
-    };
-
-    const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
-
-        const userMsg = { role: "user", text: input };
-        setMessages(prev => [...prev, userMsg]);
+        // Add user message immediately
+        setMessages((prev) => [...prev, { role: "user", content: text }]);
         setInput("");
-        setIsLoading(true);
+        setLoading(true);
 
         try {
-            const structuredPayload = preprocessInput(input);
-
-            const response = await axios.post("http://127.0.0.1:8000/ai-assistant", {
-                message: input,
-                fields: structuredPayload,
-                formData: currentData
+            const res = await fetch(`${API_URL}/ai-assistant`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text, formData }),
             });
 
-            const aiMsg = {
-                role: "ai",
-                text: response.data.ai_response || "I've processed that for you."
-            };
-            setMessages(prev => [...prev, aiMsg]);
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-            // ✅ Only update if we actually parsed something
-            if (structuredPayload && Object.keys(structuredPayload).length > 0) {
-                onAIUpdate(structuredPayload);
-            } else if (response.data.form_data) {
-                onAIUpdate(response.data.form_data);
+            const data = await res.json();
+
+            // Add AI response to chat
+            const reply = data.response || "Extraction complete.";
+            setMessages((prev) => [...prev, { role: "ai", content: reply }]);
+
+            // Update form fields via parent callback
+            if (data.formData && typeof data.formData === "object") {
+                onAIUpdate(data.formData);
             }
         } catch (error) {
-            console.error("Chat Error:", error);
-            const errorDetail = error.response ? JSON.stringify(error.response.data) : error.message;
-            setMessages(prev => [...prev, {
-                role: "ai",
-                text: `Connection Error: ${errorDetail}. Please make sure the backend server at 127.0.0.1:8000 is running.`
-            }]);
+            console.error("AI Assistant error:", error);
+            setMessages((prev) => [
+                ...prev,
+                { role: "ai", content: "⚠️ Connection failed. Make sure the backend is running on port 8000." },
+            ]);
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
     };
 
+    // Build extracted fields display from formData
+    const filledFields = Object.entries(formData || {}).filter(
+        ([, v]) => v && v !== ""
+    );
+
     return (
-        <div className="ai-assistant-panel">
-            <h3>AI Assistant</h3>
-            <div className="chat-history">
-                {messages.map((msg, index) => (
-                    <div key={index} className={`message ${msg.role}`}>
-                        {msg.text}
+        <>
+            {/* Header */}
+            <div className="ai-panel-header">
+                <h2>
+                    <span className="ai-dot"></span>
+                    AI Assistant
+                </h2>
+                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
+                    Describe an interaction and I'll extract the details
+                </p>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="chat-area">
+                {messages.length === 0 && (
+                    <div className="empty-state">
+                        <div className="empty-icon">💬</div>
+                        <div>Start by describing a medical interaction</div>
+                        <div style={{ fontSize: "0.78rem", marginTop: "0.5rem", color: "var(--text-muted)" }}>
+                            e.g. "Meeting with Dr. Sharma, cardiologist at Apollo Hospital tomorrow 10 AM about DrugX"
+                        </div>
+                    </div>
+                )}
+
+                {messages.map((msg, idx) => (
+                    <div key={idx} className={`chat-msg ${msg.role}`}>
+                        <div className="msg-label">
+                            {msg.role === "user" ? "You" : "AIVOA"}
+                        </div>
+                        <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
                     </div>
                 ))}
-                {isLoading && <div className="message ai">...</div>}
+
+                {loading && (
+                    <div className="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                )}
+
                 <div ref={chatEndRef} />
             </div>
-            <div className="chat-input-area">
+
+            {/* Extracted Fields Summary */}
+            {filledFields.length > 0 && (
+                <div className="extracted-panel">
+                    <div style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "1px",
+                        marginBottom: "0.5rem"
+                    }}>
+                        Extracted Fields
+                    </div>
+                    <div className="extracted-grid">
+                        {filledFields.slice(0, 8).map(([key, value]) => (
+                            <div key={key} className="extracted-item">
+                                <div className="ext-label">{key.replace(/_/g, " ")}</div>
+                                <div className="ext-value">{String(value).substring(0, 40)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Chat Input */}
+            <form className="chat-input-area" onSubmit={sendMessage}>
                 <input
                     type="text"
-                    placeholder="Describe interaction..."
+                    placeholder="Describe an interaction..."
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                    disabled={loading}
                 />
-                <button className="btn btn-primary" onClick={handleSend} disabled={isLoading}>
-                    Submit
+                <button
+                    type="submit"
+                    className="btn-send"
+                    disabled={loading || !input.trim()}
+                >
+                    {loading ? "..." : "Send →"}
                 </button>
-            </div>
-            <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                Tip: You can say "change date to tomorrow" or "summarize my notes".
-            </div>
-        </div>
+            </form>
+        </>
     );
-}
+};
+
+export default AIAssistant;

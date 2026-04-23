@@ -1,38 +1,48 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.database import engine, Base
-from routes import interaction_routes, ai_routes
+from routes import ai_routes, interaction_routes
 
-# Create the database tables
-# This works for both SQLite and MySQL if the user/password/host are correct
-try:
-    Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully.")
-except Exception as e:
-    print(f"Error creating database tables: {e}")
+# Create all tables on startup
+Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AIVOA Backend API")
+app = FastAPI(
+    title="AIVOA Backend API",
+    description="AI-powered CRM for Healthcare Professional interactions",
+    version="1.0.0",
+)
 
-# Configure CORS
+# CORS — allow frontend dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the actual frontend URL
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include Routers
+# Register routers
+app.include_router(ai_routes.router, tags=["AI Assistant"])
 app.include_router(interaction_routes.router, tags=["Interactions"])
-app.include_router(ai_routes.router, tags=["AI"])
+
 
 @app.get("/")
 def read_root():
     return {"status": "online", "message": "AIVOA Backend API is running"}
 
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
 
 if __name__ == "__main__":
     import uvicorn

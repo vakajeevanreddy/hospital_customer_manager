@@ -1,5 +1,6 @@
 # Environments
 .env
+.env.local
 .venv/
 env/
 venv/
@@ -43,6 +44,17 @@ yarn-error.log*
 *.sqlite
 crm.db
 
+# Build output
+Front_end/dist/
+
+# Scratch / debug files
+scratch/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -51,3 +63,6 @@ crm.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Pydantic folder (if not project code)
+pydantic/
